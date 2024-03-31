@@ -1,0 +1,268 @@
+import SwiftUI
+import AVKit
+
+
+
+struct ContentView: View {
+    @State var specificTime: Date = Date()
+    @State var currentTime: Date = Date()
+    @State var isLinkPressed: Bool = false
+    @State private var isButtonInactive = false
+    @State private var isPresentingClockView = false
+    @State private var isDummyModeEnabled = false // New state variable for dummy mode
+    
+    init() {
+        UIDatePicker.appearance().minuteInterval = 2
+    }
+    
+    var body: some View {
+        VStack(alignment: .center) {
+            Text("CORPORATE UNCONSCIOUS")
+                .font(.largeTitle)
+            
+            Text("V.7 final cut v.3")
+                .font(.system(size: 10))
+            
+            DatePicker("Select a specific time:", selection: $specificTime, displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.wheel)
+                .onChange(of: specificTime) { newValue in
+                        let calendar = Calendar.current
+                        let components = calendar.dateComponents([.hour, .minute], from: newValue)
+                        specificTime = calendar.date(bySettingHour: components.hour ?? 0, minute: components.minute ?? 0, second: 0, of: newValue) ?? Date()
+                    }
+            
+            Text("Current Time: \(formattedTime(currentTime))")
+            
+            if remainingTime >= "00:00:00" { // Updated condition to ">= 00:00:00"
+                Text("Remaining Time: \(remainingTime)")
+                    .foregroundColor(remainingTime.contains("-") || remainingTime <= "00:01:59" ? .red : .primary)
+            } else {
+                Text("Choose slot in the future")
+                    .foregroundColor(.red)
+            }
+            
+            if remainingTime >= "00:00:00" { // Updated condition to ">= 00:00:00"
+                Button(action: {
+                    if !isButtonInactive {
+                        isLinkPressed = true
+                    }
+                }) {
+                    if !isButtonInactive {
+                        Text("Play Video")
+                            .font(.title)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    } else {
+                        Text("Pick slot 2 minutes ahead")
+                            .padding()
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                }
+                .fullScreenCover(isPresented: $isLinkPressed) {
+                    CountDownView(specificTime: specificTime, remainingTime: remainingTime, isDummyModeEnabled: isDummyModeEnabled) // Pass the remaining time to CountDownView
+                }
+                .onTapGesture {
+                    isLinkPressed = true
+                }
+            } else {
+                Text("")
+                    .fullScreenCover(isPresented: $isLinkPressed) {
+                        VideoPlayerView(specificTime: specificTime, isDummyModeEnabled: isDummyModeEnabled) // Pass the dummy mode state to VideoPlayerView
+                            .allowsHitTesting(false)
+                    }
+            }
+            
+            
+            Toggle(isOn: $isDummyModeEnabled) {
+                Text("Dummy Mode")
+                    .font(.system(size: 10))
+            }
+            .padding(.top)
+            .frame(width: 150.0)
+            .toggleStyle(SwitchToggleStyle(tint: .blue))
+        
+            Button(action: {
+                isPresentingClockView = true
+            }) {
+                Text("clock")
+ 
+            }
+            .fullScreenCover(isPresented: $isPresentingClockView) {
+                ClockView(isPresented: $isPresentingClockView)
+            }
+            
+        }
+        
+        .padding()
+        
+        
+        .frame(width: 500.0)
+        .onAppear {
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+                currentTime = Date()
+                isButtonInactive = remainingTime.contains("-") || remainingTime <= "00:01:59"
+            }
+            timer.fire()
+        }
+    }
+    
+    private func formattedTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
+    }
+    
+    private var remainingTime: String {
+        let calendar = Calendar.current
+        let currentComponents = calendar.dateComponents([.hour, .minute, .second], from: currentTime)
+        let specificComponents = calendar.dateComponents([.hour, .minute, .second], from: specificTime)
+        
+        let currentSeconds = (currentComponents.hour ?? 0) * 3600 + (currentComponents.minute ?? 0) * 60 + (currentComponents.second ?? 0)
+        let specificSeconds = (specificComponents.hour ?? 0) * 3600 + (specificComponents.minute ?? 0) * 60
+        
+        var secondsRemaining = specificSeconds - currentSeconds
+        
+        if isDummyModeEnabled {
+            let dummyModeOffset = (16 * 60) + 56 // 16 minutes and 56 seconds
+            secondsRemaining += dummyModeOffset
+        }
+        
+        let (h, m, s) = (secondsRemaining / 3600, (secondsRemaining % 3600) / 60, (secondsRemaining % 3600) % 60)
+        
+        return String(format: "%02d:%02d:%02d", h, m, s)
+    }
+}
+
+struct ClockView: View {
+    @State var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @Binding var isPresented: Bool
+    @State var currentTime = Date()
+
+    var body: some View {
+        VStack {
+            Text(formattedTime(currentTime))
+                .font(.system(size: 200))
+            Button(action: {
+                isPresented = false
+            }) {
+                Text("Go back")
+            }
+        }
+        .onReceive(timer) { time in
+            currentTime = time
+        }
+    }
+    
+    private func formattedTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
+    }
+}
+
+struct CountDownView: View {
+    @State var specificTime: Date = Date()
+    @State var currentTime: Date = Date()
+    var remainingTime: String // Receive remainingTime from ContentView
+    var isDummyModeEnabled: Bool
+    
+    var body: some View {
+       
+            
+            VStack{
+                Color.black.ignoresSafeArea()
+                Spacer()
+
+                Text("Time slot: \(formattedTime(specificTime))")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 20))
+                
+                Text(remainingTime)
+                //.foregroundColor(.white)
+                    .foregroundColor(isDummyModeEnabled ? Color.red : Color.white) // Set the background color to red when Dummy Mode is enabled
+                    .font(.system(size: 86.0))
+                    .multilineTextAlignment(.leading)
+                    .onAppear {
+                        let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+                            currentTime = Date()
+                        }
+                        timer.fire()
+                    }
+                Spacer()
+
+            }
+            .frame(height: 200.0)
+
+        
+        
+        
+    }
+    
+    private func formattedTime(_ date: Date) -> String {
+            let formatter = DateFormatter()
+            formatter.timeStyle = .medium
+            formatter.dateStyle = .none
+            return formatter.string(from: date)
+        }
+}
+
+import SwiftUI
+import AVKit
+
+struct VideoPlayerView: View {
+    let playerController = AVPlayerViewController()
+    @State var player: AVPlayer?
+    var specificTime: Date
+    var isDummyModeEnabled: Bool
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack {
+                VideoPlayer(player: player ?? AVPlayer())
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spacer()
+            }
+            .edgesIgnoringSafeArea(.all)
+            .onAppear {
+                guard let videoUrl = Bundle.main.url(forResource: "myvideo", withExtension: "mp4") else { return }
+                player = AVPlayer(url: videoUrl)
+                playerController.player = player
+                
+                let timer = DispatchSource.makeTimerSource(queue: .main)
+                timer.schedule(deadline: .now(), repeating: .milliseconds(200))
+                timer.setEventHandler {
+                    let currentTime = Date()
+                    let dummyModeOffset = (16 * 60) + 56 // 16 minutes and 56 seconds
+                    let dummyTime = specificTime.addingTimeInterval(Double(-dummyModeOffset))
+                    
+                    if currentTime >= specificTime || (isDummyModeEnabled && currentTime >= dummyTime) {
+                        DispatchQueue.main.async {
+                            if isDummyModeEnabled {
+                                player?.seek(to: CMTime(seconds: 16 * 60 + 56, preferredTimescale: 1))
+                            } else {
+                                player?.seek(to: CMTime.zero) // Play from the beginning
+                            }
+                            player?.play()
+                        }
+                        timer.cancel()
+                    }
+                }
+                timer.resume()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                player?.pause()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                player?.play()
+            }
+        }
+    }
+}
